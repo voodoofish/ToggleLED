@@ -9,7 +9,7 @@
 //  //* External watch crystal installed on XIN XOUT is required for ACLK *//	
 //
 //		  MSP430F20xx
-//             -----------------
+//             ------------- ----
 //         /|\|              XIN|-
 //          | |                 | 32kHz
 //          --|RST          XOUT|-
@@ -23,11 +23,11 @@
 //******************************************************************************
 
 #include "msp430g2211.h"
-
+#include <stdint.h>
 //WDT-interval times [1ms] coded with Bits 0-2
 
 //WDT is clocked by fSMCLK (assumed 1MHz) 
-//#define WDT_MDLY_32         (WDTPW+WDTTMSEL+WDTCNTCL)                         /* 32ms interval (default) */
+//#define WDT_MDLY_32          (WDTPW+WDTTMSEL+WDTCNTCL)                         /* 32ms interval (default) */
 //#define WDT_MDLY_8          (WDTPW+WDTTMSEL+WDTCNTCL+WDTIS0)                  /* 8ms     " */
 //#define WDT_MDLY_0_5        (WDTPW+WDTTMSEL+WDTCNTCL+WDTIS1)                  /* 0.5ms   " */
 //#define WDT_MDLY_0_064      (WDTPW+WDTTMSEL+WDTCNTCL+WDTIS1+WDTIS0)           /* 0.064ms " */
@@ -36,13 +36,13 @@
 //#define WDT_ADLY_250        (WDTPW+WDTTMSEL+WDTCNTCL+WDTSSEL+WDTIS0)          /* 250ms   " */
 //#define WDT_ADLY_16         (WDTPW+WDTTMSEL+WDTCNTCL+WDTSSEL+WDTIS1)          /* 16ms    " */
 //#define WDT_ADLY_1_9        (WDTPW+WDTTMSEL+WDTCNTCL+WDTSSEL+WDTIS1+WDTIS0)   /* 1.9ms   " */
-unsigned short countIt = 0;
-unsigned short mc_flag = 0;
-unsigned short CA_LED = BIT5;
-void WD_intervalTimerInit(unsigned char interval, unsigned short delay);
+uint8_t countIt = 0;
+uint8_t mc_flag = 0;
+uint16_t CA_LED = BIT5;
+void WD_intervalTimerInit(uint8_t interval, uint8_t delay);
 
-void WD_intervalTimerInit(unsigned char interval, unsigned short delay){
-unsigned int currentDelay =0;
+void WD_intervalTimerInit(uint8_t interval, uint8_t delay){
+uint16_t currentDelay =0;
   	switch(delay)
 	{
 	case 1 :
@@ -65,7 +65,7 @@ unsigned int currentDelay =0;
 	__no_operation();
 	}
 	
-	unsigned char i = 0;
+	uint8_t i = 0;
 	WDTCTL = currentDelay;
 	for(i=0;i<=interval;i++){
   	//WDTCTL = WDT_ADLY_250;                    // WDT 250ms, ACLK, interval timer
@@ -76,8 +76,8 @@ unsigned int currentDelay =0;
 	WDTCTL = WDTPW + WDTHOLD;
 }
 
-	unsigned char foo = 0;
-	unsigned short bar = 1;	
+	uint8_t foo = 0;
+	uint8_t bar = 1;	
 	
 	//soft serial
 void serial_setup(unsigned out_mask, unsigned in_mask, unsigned duration);
@@ -97,7 +97,7 @@ WDTCTL = WDTPW + WDTHOLD;                 // Stop WDT
 	//WDTCTL = WDT_ADLY_16;                    // WDT 1000ms, ACLK, interval timer
 	//BCSCTL3 |= LFXT1S_2; 
   	IE1 |= WDTIE;                             // Enable WDT interrupt
-  	P1DIR |= BIT7 + BIT6;                            // Set P1.0 to output direction
+  	P1DIR |= BIT7 + BIT6 + CA_LED;                            // Set P1.x output direction
 	
 	P1IE = BIT3 + BIT4; // P1.3 interrupt enabled
 	P1IES |= BIT3 + BIT4; // P1.3 Hi/lo edge
@@ -120,17 +120,18 @@ WDTCTL = WDTPW + WDTHOLD;                 // Stop WDT
   while(1){
   	
   	WD_intervalTimerInit(foo,bar);
-  	P1OUT |= BIT6;
-  	WDTCTL = WDT_ADLY_16;
-  	_BIS_SR(LPM1_bits);
-  	P1OUT &= ~BIT6;
-  	WDTCTL = WDTPW + WDTHOLD; 
+  	//WD_intervalTimerInit(1,3); //this will cause delays in the program
+  	P1OUT |= BIT6;			//turn on LED
+  	WDTCTL = WDT_ADLY_16;	//Add a delay
+  	_BIS_SR(LPM1_bits);		//sleep little one..
+  	P1OUT &= ~BIT6;			//turn off LED
+  	WDTCTL = WDTPW + WDTHOLD; //turn off WDT
   	if (mc_flag ==0)
   		{TACTL &= ~MC_3;
   		//CCR0 = 0;
-  		puts("blink off");
-  		putc(13);
-  		putc(10);
+  		//puts("blink off");
+  		//putc(13);
+  		//putc(10);
   		}
   	if (mc_flag ==1)
   		{TACTL |= MC_3;
@@ -168,6 +169,7 @@ __interrupt void Port_1(void)
  //if((P1IFG & 0x20)==0x20)
  if((P1IFG & BIT3)==BIT3){
 	P1IFG &= ~BIT3; // P1.3 IFG cleared
+	
 	if (foo >=5){
 		foo = 0;
 		if (bar >= 4){
@@ -175,6 +177,10 @@ __interrupt void Port_1(void)
 			else{bar++;}
 		}
 	else {foo++;}
+	
+  		puts("b1 press");
+  		putc(13);
+  		putc(10);	
 //	_low_power_mode_off_on_exit();
  }
  
@@ -205,13 +211,18 @@ __interrupt void Timer_A(void)
 #pragma vector = COMPARATORA_VECTOR
 __interrupt void COMPA_ISR(void) {
 	if ((CACTL2 & CAOUT)==0x01) {
+		P1OUT |= CA_LED;
+  		puts("compA");
+  		putc(13);
+  		putc(10);	
 		CACTL1 |= CAIES;		// value high, so watch for falling edge
-		//flash = LED1;			// let LED flash
 	}
 	else {
 		CACTL1 &= ~CAIES;		// value low, so watch for rising edge
 		//flash = 0;				// turn LED off
 		//P1OUT = 0;
-	}		
+		P1OUT &= ~CA_LED;
+	}
+			
 } // COMPA_ISR
 
